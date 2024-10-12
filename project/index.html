@@ -10,65 +10,9 @@
 	<body>
 		<h1>Візуалізація GPS Вимірювань</h1>
 
-		<!-- Контейнер для графіку -->
 		<div id="plot"></div>
 
-		<!-- Статус підключення -->
 		<div id="status">Підключення до WebSocket...</div>
-
-		<!-- Форма для зміни параметрів GPS -->
-		<div id="config">
-			<h2>Налаштування GPS Емулятора</h2>
-			<form id="config-form">
-				<label for="emulationZoneSize">Розмір зони емуляції (км):</label>
-				<input
-					type="text"
-					id="emulationZoneSize"
-					name="emulationZoneSize"
-					placeholder="Наприклад, 200x200"
-					required
-				/>
-				<br /><br />
-
-				<label for="messageFrequency"
-					>Частота повідомлень (повідомлень/сек):</label
-				>
-				<input
-					type="number"
-					id="messageFrequency"
-					name="messageFrequency"
-					min="1"
-					value="1"
-					required
-				/>
-				<br /><br />
-
-				<label for="satelliteSpeed">Швидкість супутників (км/год):</label>
-				<input
-					type="number"
-					id="satelliteSpeed"
-					name="satelliteSpeed"
-					min="1"
-					value="100"
-					required
-				/>
-				<br /><br />
-
-				<label for="objectSpeed">Швидкість об'єкта (км/год):</label>
-				<input
-					type="number"
-					id="objectSpeed"
-					name="objectSpeed"
-					min="1"
-					value="10"
-					required
-				/>
-				<br /><br />
-
-				<button type="submit">Застосувати Налаштування</button>
-			</form>
-			<div id="config-status"></div>
-		</div>
 
 		<script src="script.js"></script>
 	</body>

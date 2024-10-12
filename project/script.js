@@ -1,27 +1,30 @@
-// Параметри відомих точок (супутників)
 const satellites = {}
-
-// Координати об'єкта
 let objectPosition = null
-
-// Підключення до WebSocket сервера
-const ws = new WebSocket('ws://localhost:4001') // Заміни URL при необхідності
+const ws = new WebSocket('ws://localhost:4001')
 
 const statusDiv = document.getElementById('status')
-const configForm = document.getElementById('config-form')
-const configStatusDiv = document.getElementById('config-status')
 
-// Ініціалізація графіку
 const layout = {
 	title: "Положення Об'єкта та Супутників",
-	xaxis: { title: 'X (км)' },
-	yaxis: { title: 'Y (км)' },
+	xaxis: {
+		title: 'X (км)',
+		zeroline: true,
+		showgrid: true,
+		gridcolor: '#e0e0e0',
+	},
+	yaxis: {
+		title: 'Y (км)',
+		zeroline: true,
+		showgrid: true,
+		gridcolor: '#e0e0e0',
+	},
 	showlegend: true,
 	width: 800,
 	height: 600,
+	legend: { x: 0.1, y: 1.1, orientation: 'h' },
+	margin: { l: 50, r: 50, b: 50, t: 100 },
 }
 
-// Початкові дані для графіку
 const data = [
 	{
 		x: [],
@@ -29,7 +32,9 @@ const data = [
 		mode: 'markers',
 		type: 'scatter',
 		name: 'Супутники',
-		marker: { color: 'blue', size: 8 },
+		marker: { color: 'blue', size: 8, symbol: 'circle' },
+		text: [],
+		hoverinfo: 'text',
 	},
 	{
 		x: [],
@@ -38,39 +43,67 @@ const data = [
 		type: 'scatter',
 		name: "Об'єкт",
 		marker: { color: 'red', size: 12, symbol: 'x' },
+		text: ["Об'єкт"],
+		hoverinfo: 'text',
 	},
 ]
 
 Plotly.newPlot('plot', data, layout)
 
-// Обробка подій WebSocket
 ws.onopen = () => {
 	console.log('Підключено до WebSocket сервера.')
 	statusDiv.textContent = 'Підключено до WebSocket сервера.'
 }
 
 ws.onmessage = event => {
-	const data = JSON.parse(event.data)
-	console.log('Отримано дані:', data)
+	const receivedData = JSON.parse(event.data)
+	console.log('Отримано дані:', receivedData)
 
-	// Перевірка, чи це повідомлення від об'єкта чи супутника
-	if (data.id === 'object') {
-		objectPosition = { x: data.x, y: data.y }
-	} else {
-		// Обчислення відстані до об'єкта (r) на основі часу відправки та отримання
-		// Швидкість сигналу світла в повітрі ~300000 км/с
+	if (receivedData.id === 'object') {
+		if (receivedData.x !== null && receivedData.y !== null) {
+			objectPosition = { x: receivedData.x, y: receivedData.y }
+			plotData()
+		} else {
+			console.warn(
+				`Некоректні координати для об'єкта: x=${receivedData.x}, y=${receivedData.y}`
+			)
+		}
+	} else if (
+		receivedData.x !== null &&
+		receivedData.y !== null &&
+		receivedData.sentAt !== null &&
+		receivedData.receivedAt !== null
+	) {
 		const signalSpeed = 300000 // км/с
-		const timeDiff = (data.receivedAt - data.sentAt) / 1000 // секунди
-		const distance = signalSpeed * timeDiff // км
+		const timeDiff = (receivedData.receivedAt - receivedData.sentAt) / 1000 // секунди
+		const distance = signalSpeed * timeDiff
 
-		satellites[data.id] = { x: data.x, y: data.y, r: distance }
+		satellites[receivedData.id] = {
+			x: receivedData.x,
+			y: receivedData.y,
+			r: distance,
+		}
+
+		const satelliteIds = Object.keys(satellites)
+		if (satelliteIds.length > 3) {
+			delete satellites[satelliteIds[0]]
+		}
+	} else {
+		console.warn(
+			`Некоректні дані для супутника ${receivedData.id}:`,
+			receivedData
+		)
 	}
 
-	// Якщо зібрано дані від трьох супутників, виконуємо трилатерацію
-	if (Object.keys(satellites).length >= 3) {
-		const satArray = Object.values(satellites).slice(0, 3)
-		const result = trilaterate(satArray[0], satArray[1], satArray[2])
-
+	const validSatellites = Object.values(satellites).filter(
+		sat => sat.x !== null && sat.y !== null && sat.r !== null
+	)
+	if (validSatellites.length === 3) {
+		const result = trilaterate(
+			validSatellites[0],
+			validSatellites[1],
+			validSatellites[2]
+		)
 		if (result) {
 			objectPosition = { x: result.x, y: result.y }
 			plotData()
@@ -90,13 +123,11 @@ ws.onerror = error => {
 	statusDiv.textContent = 'Помилка підключення до WebSocket сервера.'
 }
 
-// Функція трилатерації
 function trilaterate(sat1, sat2, sat3) {
 	const { x: x1, y: y1, r: r1 } = sat1
 	const { x: x2, y: y2, r: r2 } = sat2
 	const { x: x3, y: y3, r: r3 } = sat3
 
-	// Переведення рівнянь кіл до лінійного вигляду
 	const A = 2 * (x2 - x1)
 	const B = 2 * (y2 - y1)
 	const C = r1 ** 2 - r2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2
@@ -105,7 +136,6 @@ function trilaterate(sat1, sat2, sat3) {
 	const E = 2 * (y3 - y2)
 	const F = r2 ** 2 - r3 ** 2 - x2 ** 2 + x3 ** 2 - y2 ** 2 + y3 ** 2
 
-	// Обчислення детермінанту
 	const denominator = A * E - D * B
 	if (denominator === 0) {
 		console.error('Детермінант рівняння трилатерації дорівнює нулю.')
@@ -118,15 +148,22 @@ function trilaterate(sat1, sat2, sat3) {
 	return { x, y }
 }
 
-// Функція для відображення даних на графіку
 function plotData() {
 	const satX = []
 	const satY = []
+	const satText = []
 
-	for (const sat of Object.values(satellites)) {
-		satX.push(sat.x)
-		satY.push(sat.y)
-	}
+	Object.entries(satellites)
+		.slice(0, 3)
+		.forEach(([id, sat]) => {
+			satX.push(sat.x)
+			satY.push(sat.y)
+			satText.push(
+				`Супутник ${id}<br>X: ${sat.x.toFixed(2)} км<br>Y: ${sat.y.toFixed(
+					2
+				)} км`
+			)
+		})
 
 	const traceSatellites = {
 		x: satX,
@@ -134,64 +171,31 @@ function plotData() {
 		mode: 'markers',
 		type: 'scatter',
 		name: 'Супутники',
-		marker: { color: 'blue', size: 8 },
+		marker: { color: 'blue', size: 8, symbol: 'circle' },
+		text: satText,
+		hoverinfo: 'text',
 	}
 
-	let traceObject = {}
-	if (objectPosition) {
-		traceObject = {
-			x: [objectPosition.x],
-			y: [objectPosition.y],
-			mode: 'markers',
-			type: 'scatter',
-			name: "Об'єкт",
-			marker: { color: 'red', size: 12, symbol: 'x' },
-		}
-	}
+	const traceObject = objectPosition
+		? {
+				x: [objectPosition.x],
+				y: [objectPosition.y],
+				mode: 'markers',
+				type: 'scatter',
+				name: "Об'єкт",
+				marker: { color: 'red', size: 12, symbol: 'x' },
+				text: [
+					`Об'єкт<br>X: ${objectPosition.x.toFixed(
+						2
+					)} км<br>Y: ${objectPosition.y.toFixed(2)} км`,
+				],
+				hoverinfo: 'text',
+		  }
+		: null
 
-	const update = {
-		x: [traceSatellites.x, traceObject.x],
-		y: [traceSatellites.y, traceObject.y],
-	}
-
-	Plotly.react('plot', [traceSatellites, traceObject], layout)
+	Plotly.react(
+		'plot',
+		[traceSatellites].concat(traceObject ? [traceObject] : []),
+		layout
+	)
 }
-
-// Обробка форми для зміни параметрів GPS
-configForm.addEventListener('submit', e => {
-	e.preventDefault()
-
-	const emulationZoneSize = document.getElementById('emulationZoneSize').value
-	const messageFrequency = document.getElementById('messageFrequency').value
-	const satelliteSpeed = document.getElementById('satelliteSpeed').value
-	const objectSpeed = document.getElementById('objectSpeed').value
-
-	const configData = {
-		emulationZoneSize: emulationZoneSize,
-		messageFrequency: parseInt(messageFrequency),
-		satelliteSpeed: parseInt(satelliteSpeed),
-		objectSpeed: parseInt(objectSpeed),
-	}
-
-	// Відправка POST запиту до API для зміни параметрів
-	fetch('http://localhost:4001/config', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify(configData),
-	})
-		.then(response => {
-			if (response.ok) {
-				configStatusDiv.textContent = 'Налаштування успішно застосовано.'
-				configStatusDiv.style.color = 'green'
-			} else {
-				throw new Error('Помилка при застосуванні налаштувань.')
-			}
-		})
-		.catch(error => {
-			console.error('Помилка:', error)
-			configStatusDiv.textContent = 'Не вдалося застосувати налаштування.'
-			configStatusDiv.style.color = 'red'
-		})
-})
