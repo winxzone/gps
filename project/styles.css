@@ -1,0 +1,70 @@
+body {
+	font-family: Arial, sans-serif;
+	text-align: center;
+	margin: 0;
+	padding: 0;
+	background-color: #f0f0f0;
+}
+
+h1 {
+	background-color: #4caf50;
+	color: white;
+	padding: 20px 0;
+	margin: 0 0 20px 0;
+}
+
+#plot {
+	width: 80%;
+	height: 600px;
+	margin: 0 auto;
+}
+
+#status {
+	margin-top: 20px;
+	font-size: 1.2em;
+	color: #333;
+}
+
+#config {
+	width: 80%;
+	margin: 40px auto;
+	background-color: #ffffff;
+	padding: 20px;
+	border-radius: 8px;
+	box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+#config h2 {
+	color: #4caf50;
+}
+
+#config-form label {
+	display: inline-block;
+	width: 250px;
+	text-align: right;
+}
+
+#config-form input {
+	width: 200px;
+	padding: 5px;
+	margin-left: 10px;
+}
+
+#config-form button {
+	padding: 10px 20px;
+	background-color: #4caf50;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+#config-form button:hover {
+	background-color: #45a049;
+}
+
+#config-status {
+	margin-top: 20px;
+	font-size: 1em;
+	color: #333;
+}
