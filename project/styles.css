@@ -1,0 +1,7 @@
+body {
+	font-family: Arial, sans-serif;
+}
+#plot {
+	width: 100%;
+	height: 600px;
+}
