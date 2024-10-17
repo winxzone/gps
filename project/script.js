@@ -1,201 +1,95 @@
-const satellites = {}
-let objectPosition = null
-const ws = new WebSocket('ws://localhost:4001')
+const socket = new WebSocket('ws://localhost:4001')
+const satelliteData = {}
+const objectData = {}
+const maxStaleTime = 1000
+const lastUpdateTime = {}
+const boundaries = { x: [0, 120], y: [0, 120] }
 
-const statusDiv = document.getElementById('status')
+socket.onmessage = function (event) {
+	const message = JSON.parse(event.data)
+	console.log('Received message:', message)
 
-const layout = {
-	title: "Положення Об'єкта та Супутників",
-	xaxis: {
-		title: 'X (км)',
-		zeroline: true,
-		showgrid: true,
-		gridcolor: '#e0e0e0',
-	},
-	yaxis: {
-		title: 'Y (км)',
-		zeroline: true,
-		showgrid: true,
-		gridcolor: '#e0e0e0',
-	},
-	showlegend: true,
-	width: 800,
-	height: 600,
-	legend: { x: 0.1, y: 1.1, orientation: 'h' },
-	margin: { l: 50, r: 50, b: 50, t: 100 },
+	const currentTime = Date.now()
+
+	// Обновляем спутники
+	satelliteData[message.id] = { x: message.x, y: message.y }
+	lastUpdateTime[message.id] = currentTime
+
+	removeStalePoints(currentTime)
+	calculateObjectPosition()
+	updatePlot()
 }
 
-const data = [
-	{
-		x: [],
-		y: [],
-		mode: 'markers',
-		type: 'scatter',
-		name: 'Супутники',
-		marker: { color: 'blue', size: 8, symbol: 'circle' },
-		text: [],
-		hoverinfo: 'text',
-	},
-	{
-		x: [],
-		y: [],
-		mode: 'markers',
-		type: 'scatter',
-		name: "Об'єкт",
-		marker: { color: 'red', size: 12, symbol: 'x' },
-		text: ["Об'єкт"],
-		hoverinfo: 'text',
-	},
-]
-
-Plotly.newPlot('plot', data, layout)
-
-ws.onopen = () => {
-	console.log('Підключено до WebSocket сервера.')
-	statusDiv.textContent = 'Підключено до WebSocket сервера.'
+function removeStalePoints(currentTime) {
+	Object.keys(satelliteData).forEach(id => {
+		if (currentTime - lastUpdateTime[id] > maxStaleTime) {
+			delete satelliteData[id]
+			delete lastUpdateTime[id]
+		}
+	})
 }
 
-ws.onmessage = event => {
-	const receivedData = JSON.parse(event.data)
-	console.log('Отримано дані:', receivedData)
+function calculateObjectPosition() {
+	const satelliteArray = Object.values(satelliteData)
 
-	if (receivedData.id === 'object') {
-		if (receivedData.x !== null && receivedData.y !== null) {
-			objectPosition = { x: receivedData.x, y: receivedData.y }
-			plotData()
+	if (satelliteArray.length >= 3) {
+		const [sat1, sat2, sat3] = satelliteArray.slice(0, 3) // берём 3 спутника
+
+		const avgX = (sat1.x + sat2.x + sat3.x) / 3 // тут среднее положение но осям
+		const avgY = (sat1.y + sat2.y + sat3.y) / 3
+
+		console.log(`Calculated object position: x=${avgX}, y=${avgY}`)
+
+		if (
+			avgX >= boundaries.x[0] &&
+			avgX <= boundaries.x[1] &&
+			avgY >= boundaries.y[0] &&
+			avgY <= boundaries.y[1]
+		) {
+			objectData.x = avgX
+			objectData.y = avgY
 		} else {
-			console.warn(
-				`Некоректні координати для об'єкта: x=${receivedData.x}, y=${receivedData.y}`
-			)
-		}
-	} else if (
-		receivedData.x !== null &&
-		receivedData.y !== null &&
-		receivedData.sentAt !== null &&
-		receivedData.receivedAt !== null
-	) {
-		const signalSpeed = 300000 // км/с
-		const timeDiff = (receivedData.receivedAt - receivedData.sentAt) / 1000 // секунди
-		const distance = signalSpeed * timeDiff
-
-		satellites[receivedData.id] = {
-			x: receivedData.x,
-			y: receivedData.y,
-			r: distance,
-		}
-
-		const satelliteIds = Object.keys(satellites)
-		if (satelliteIds.length > 3) {
-			delete satellites[satelliteIds[0]]
+			objectData.x = undefined
+			objectData.y = undefined
 		}
 	} else {
-		console.warn(
-			`Некоректні дані для супутника ${receivedData.id}:`,
-			receivedData
-		)
-	}
-
-	const validSatellites = Object.values(satellites).filter(
-		sat => sat.x !== null && sat.y !== null && sat.r !== null
-	)
-	if (validSatellites.length === 3) {
-		const result = trilaterate(
-			validSatellites[0],
-			validSatellites[1],
-			validSatellites[2]
-		)
-		if (result) {
-			objectPosition = { x: result.x, y: result.y }
-			plotData()
-		} else {
-			console.error("Не вдалося визначити позицію об'єкта.")
-		}
+		console.log('Not enough satellites for determining object position')
 	}
 }
 
-ws.onclose = () => {
-	console.log('Відключено від WebSocket сервера.')
-	statusDiv.textContent = 'Відключено від WebSocket сервера.'
-}
+function updatePlot() {
+	const satelliteArray = Object.values(satelliteData)
 
-ws.onerror = error => {
-	console.error('WebSocket помилка:', error)
-	statusDiv.textContent = 'Помилка підключення до WebSocket сервера.'
-}
-
-function trilaterate(sat1, sat2, sat3) {
-	const { x: x1, y: y1, r: r1 } = sat1
-	const { x: x2, y: y2, r: r2 } = sat2
-	const { x: x3, y: y3, r: r3 } = sat3
-
-	const A = 2 * (x2 - x1)
-	const B = 2 * (y2 - y1)
-	const C = r1 ** 2 - r2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2
-
-	const D = 2 * (x3 - x2)
-	const E = 2 * (y3 - y2)
-	const F = r2 ** 2 - r3 ** 2 - x2 ** 2 + x3 ** 2 - y2 ** 2 + y3 ** 2
-
-	const denominator = A * E - D * B
-	if (denominator === 0) {
-		console.error('Детермінант рівняння трилатерації дорівнює нулю.')
-		return null
-	}
-
-	const x = (C * E - F * B) / denominator
-	const y = (A * F - D * C) / denominator
-
-	return { x, y }
-}
-
-function plotData() {
-	const satX = []
-	const satY = []
-	const satText = []
-
-	Object.entries(satellites)
-		.slice(0, 3)
-		.forEach(([id, sat]) => {
-			satX.push(sat.x)
-			satY.push(sat.y)
-			satText.push(
-				`Супутник ${id}<br>X: ${sat.x.toFixed(2)} км<br>Y: ${sat.y.toFixed(
-					2
-				)} км`
-			)
-		})
-
-	const traceSatellites = {
-		x: satX,
-		y: satY,
+	const satelliteTrace = {
+		x: satelliteArray.map(d => d.x),
+		y: satelliteArray.map(d => d.y),
 		mode: 'markers',
 		type: 'scatter',
-		name: 'Супутники',
-		marker: { color: 'blue', size: 8, symbol: 'circle' },
-		text: satText,
-		hoverinfo: 'text',
+		name: 'Спутники',
+		marker: { size: 8, color: 'blue' },
 	}
 
-	const traceObject = objectPosition
-		? {
-				x: [objectPosition.x],
-				y: [objectPosition.y],
-				mode: 'markers',
-				type: 'scatter',
-				name: "Об'єкт",
-				marker: { color: 'red', size: 12, symbol: 'x' },
-				text: [
-					`Об'єкт<br>X: ${objectPosition.x.toFixed(
-						2
-					)} км<br>Y: ${objectPosition.y.toFixed(2)} км`,
-				],
-				hoverinfo: 'text',
-		  }
-		: null
+	const objectTrace = {
+		x: objectData.x !== undefined ? [objectData.x] : [],
+		y: objectData.y !== undefined ? [objectData.y] : [],
+		mode: 'markers',
+		type: 'scatter',
+		name: 'Обьект',
+		marker: { size: 12, color: 'red' },
+	}
 
-	Plotly.react(
-		'plot',
-		[traceSatellites].concat(traceObject ? [traceObject] : []),
-		layout
-	)
+	const layout = {
+		title: 'GPS Emulation Viewer',
+		xaxis: {
+			title: 'X',
+			range: boundaries.x,
+		},
+		yaxis: {
+			title: 'Y',
+			range: boundaries.y,
+		},
+		showlegend: true,
+	}
+
+	Plotly.newPlot('plot', [satelliteTrace, objectTrace], layout)
 }
