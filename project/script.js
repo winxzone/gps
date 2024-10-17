@@ -33,7 +33,11 @@ function calculateObjectPosition() {
 	const satelliteArray = Object.values(satelliteData)
 
 	if (satelliteArray.length >= 3) {
+<<<<<<< HEAD
 		const [sat1, sat2, sat3] = satelliteArray.slice(0, 3) // берём 3 спутника
+=======
+		const [sat1, sat2, sat3] = satelliteArray.slice(0, 3) // 3 спутника
+>>>>>>> c9c8d19aa229b5cc7642141323c7dc2e7c56af40
 
 		const avgX = (sat1.x + sat2.x + sat3.x) / 3 // тут среднее положение но осям
 		const avgY = (sat1.y + sat2.y + sat3.y) / 3
