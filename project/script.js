@@ -65,7 +65,7 @@ function updatePlot() {
 		y: satelliteArray.map(d => d.y),
 		mode: 'markers',
 		type: 'scatter',
-		name: 'Спутники',
+		name: 'Супутники',
 		marker: { size: 8, color: 'blue' },
 	}
 
@@ -79,7 +79,7 @@ function updatePlot() {
 	}
 
 	const layout = {
-		title: 'GPS Emulation Viewer',
+		title: '',
 		xaxis: {
 			title: 'X',
 			range: boundaries.x,
