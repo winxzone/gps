@@ -5,3 +5,4 @@
 ## Результат роботи 
 
 ![](screenshots/s1.png)
+![](screenshots/gps.gif)
